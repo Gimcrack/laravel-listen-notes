@@ -1,0 +1,6 @@
+{
+    "vendor" : "ingenious",
+    "package_name" : "laravel-listen-notes",
+    "description" : "Listen Notes API Implemented for Laravel",
+    "repo_url" : "https://github.com/Gimcrack/listen-notes-laravel"
+}
