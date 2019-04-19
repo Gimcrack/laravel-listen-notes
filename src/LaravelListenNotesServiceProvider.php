@@ -14,9 +14,9 @@ class LaravelListenNotesServiceProvider extends ServiceProvider
     public function boot()
     {
         // config
-        // $this->publishes([
-        //     __DIR__.'/config/laravel-listen-notes.php' => config_path('laravel-listen-notes.php')
-        // ], 'config');
+         $this->publishes([
+             __DIR__.'/config/laravel-listen-notes.php' => config_path('laravel-listen-notes.php')
+         ], 'config');
 
     }
 

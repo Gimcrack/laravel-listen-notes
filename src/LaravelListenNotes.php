@@ -8,12 +8,20 @@ class LaravelListenNotes {
 
     protected $endpoint;
 
+    protected $token;
+
+    protected $force_flag;
+
     /**
      * New up a new LaravelListenNotes class
      */
     public function __construct()
     {
-        $this->endpoint = "endpoint";
+        $this->endpoint = config('laravel-listen-notes.endpoint');
+
+        $this->token = config('laravel-listen-notes.token');
+
+        $this->force_flag = false;
     }
 
     /**
@@ -37,21 +45,29 @@ class LaravelListenNotes {
     protected function url($url)
     {
         $url = vsprintf("%s/%s", [
-            $this->endpoint,
+            trim($this->endpoint,'/'),
             trim($url,'/')
         ]);
 
         return $url;
     }
 
+    public function force()
+    {
+        $this->force_flag = true;
+
+        return $this;
+    }
+
     /**
      * Get the request url and return json
      * @method getJson
      *
-     * @param  string  $url
+     * @param  string $url
+     * @param  array|mixed $params
      * @return   string
      */
-    public function get($url)
+    public function get($url, $params)
     {
         $expanded = $this->url($url);
 
@@ -62,8 +78,26 @@ class LaravelListenNotes {
 
         $this->force_flag = false;
 
-        return Cache::remember( "laravel-listen-notes.{$expanded}", 15, function() use ($expanded) {
-            return Zttp::get($expanded)->json();
-        });
+        //return Cache::remember( "laravel-listen-notes.{$expanded}", 15, function() use ($expanded, $params) {
+            return Zttp::withHeaders(['X-ListenAPI-Key' => $this->token])->get($expanded, $params)->json();
+        //});
+    }
+
+    public function search($query, $type = "episode")
+    {
+        return $this->get("search", [
+            'q' => $query,
+            'type' => $type
+        ]);
+    }
+
+    public function searchPodcasts($query)
+    {
+        return $this->search($query, "podcast");
+    }
+
+    public function searchCurated($query)
+    {
+        return $this->search($query, "curated");
     }
 }
