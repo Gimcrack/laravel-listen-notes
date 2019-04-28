@@ -16,6 +16,6 @@ class LaravelListenNotes extends Facade
      */
     protected static function getFacadeAccessor()
     {
-        return 'LaravelListenNotes';
+        return 'PodcastSearch';
     }
 }

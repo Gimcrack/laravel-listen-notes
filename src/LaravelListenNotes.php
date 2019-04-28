@@ -2,102 +2,239 @@
 
 namespace Ingenious\LaravelListenNotes;
 
-use Zttp\Zttp;
 
-class LaravelListenNotes {
+use Ingenious\LaravelListenNotes\Contracts\PodcastProvider;
+use Ingenious\LaravelListenNotes\Models\Genre;
+use Ingenious\LaravelListenNotes\Repositories\ApiResponse;
+use Ingenious\LaravelListenNotes\Repositories\Episode;
+use Ingenious\LaravelListenNotes\Repositories\EpisodeCollection;
+use Ingenious\LaravelListenNotes\Repositories\GenreCollection;
+use Ingenious\LaravelListenNotes\Repositories\Podcast;
+use Ingenious\LaravelListenNotes\Repositories\PodcastCollection;
+use Ingenious\LaravelListenNotes\Repositories\SearchResults;
 
-    protected $endpoint;
+class LaravelListenNotes extends BasePodcastProvider implements PodcastProvider
+{
 
-    protected $token;
-
-    protected $force_flag;
-
-    /**
-     * New up a new LaravelListenNotes class
-     */
-    public function __construct()
-    {
-        $this->endpoint = config('laravel-listen-notes.endpoint');
-
-        $this->token = config('laravel-listen-notes.token');
-
-        $this->force_flag = false;
-    }
+    protected const CACHE_ONE_MONTH = 30 * 24 * 60 * 60;
+    protected const CACHE_ONE_WEEK = 7 * 24 * 60 * 60;
+    protected const CACHE_ONE_DAY = 24 * 60 * 60;
+    protected const CACHE_ONE_HOUR = 60 * 60;
 
     /**
-     * Get the endpoint
-     * @method endpoint
+     * Search Podcasts
      *
-     * @return   string
+     * @param $query
+     * @param array $options
+     * @return \Ingenious\LaravelListenNotes\Repositories\PodcastCollection
      */
-    protected function endpoint()
+    public function searchPodcasts($query, $options = []) : PodcastCollection
     {
-        return $this->endpoint;
+        return $this->search($query, "podcast", $options)->podcasts();
     }
 
     /**
-     * Get the formatted url
-     * @method url
+     * Search episodes
      *
-     * @param  string $url
-     * @return   string
+     * @param $query
+     * @param array $options
+     * @return \Ingenious\LaravelListenNotes\Repositories\EpisodeCollection
      */
-    protected function url($url)
+    public function searchEpisodes($query, $options = []) : EpisodeCollection
     {
-        $url = vsprintf("%s/%s", [
-            trim($this->endpoint,'/'),
-            trim($url,'/')
-        ]);
-
-        return $url;
-    }
-
-    public function force()
-    {
-        $this->force_flag = true;
-
-        return $this;
+        return $this->search($query, "episode", $options)->episodes();
     }
 
     /**
-     * Get the request url and return json
-     * @method getJson
+     * Search the podcasts
      *
-     * @param  string $url
-     * @param  array|mixed $params
-     * @return   string
+     * @param $query
+     * @param array $options
+     * @return array
      */
-    public function get($url, $params)
+    public function searchPodcastsRaw($query, $options = []) : array
     {
-        $expanded = $this->url($url);
-
-        if ( $this->force_flag )
-        {
-            Cache::forget("laravel-listen-notes.{$expanded}");
-        }
-
-        $this->force_flag = false;
-
-        //return Cache::remember( "laravel-listen-notes.{$expanded}", 15, function() use ($expanded, $params) {
-            return Zttp::withHeaders(['X-ListenAPI-Key' => $this->token])->get($expanded, $params)->json();
-        //});
-    }
-
-    public function search($query, $type = "episode")
-    {
-        return $this->get("search", [
+        return $this->get("search", array_merge([
             'q' => $query,
-            'type' => $type
-        ]);
+            'type' => "podcast"
+        ], $options))->toArray();
     }
 
-    public function searchPodcasts($query)
+    /**
+     * Search the episodes
+     *
+     * @param $query
+     * @param array $options
+     * @return array
+     */
+    public function searchEpisodesRaw($query, $options = []) : array
     {
-        return $this->search($query, "podcast");
+        return $this->get("search", array_merge([
+            'q' => $query,
+            'type' => "episode"
+        ], $options))->toArray();
     }
 
-    public function searchCurated($query)
+    //public function searchCurated($query)
+    //{
+    //    return $this->search($query, "curated");
+    //}
+
+    /**
+     * Get the podcast by name
+     *
+     * @param $name
+     * @return \Ingenious\LaravelListenNotes\Repositories\Podcast
+     */
+    public function podcastByName($name) : Podcast
     {
-        return $this->search($query, "curated");
+        $result = collect($this->searchPodcastsRaw($name)['results'])
+            ->filter( function($row) use ($name) {
+                return $row['title_original'] === $name;
+            })
+            ->first();
+
+        //$result = $this->searchPodcasts($name)->first();
+
+        return Podcast::find($result['id']);
+    }
+
+    /**
+     * Get the specified podcast
+     *
+     * @param $id
+     * @param null $next_episode_pub_date
+     * @param string $sort recent_first|oldest_first
+     * @return \Ingenious\LaravelListenNotes\Repositories\Podcast
+     */
+    public function podcast($id, $next_episode_pub_date = null, $sort = "recent_first") : Podcast
+    {
+        return $this->podcastMeta($id, $next_episode_pub_date, $sort)->podcast();
+    }
+
+    /**
+     * Get the podcast in Raw ApiResponse form
+     *
+     * @param $id
+     * @param null $next_episode_pub_date
+     * @param string $sort
+     * @return \Ingenious\LaravelListenNotes\Repositories\ApiResponse
+     */
+    public function podcastMeta($id, $next_episode_pub_date = null, $sort = "recent_first") : ApiResponse
+    {
+        $params = compact('sort');
+
+        if ( $next_episode_pub_date )
+            $params['next_episode_pub_date'] = $next_episode_pub_date;
+
+        return $this->get("podcasts/{$id}", $params);
+    }
+
+    /**
+     * Get the episode
+     *
+     * @param $id
+     * @return \Ingenious\LaravelListenNotes\Repositories\Episode
+     */
+    public function episode($id) : Episode
+    {
+        return $this->episodeMeta($id)->episode();
+    }
+
+    /**
+     * Get the episode in Raw ApiResponse form
+     *
+     * @param $id
+     * @return \Ingenious\LaravelListenNotes\Repositories\ApiResponse
+     */
+    public function episodeMeta($id) : ApiResponse
+    {
+        return $this->ttl(static::CACHE_ONE_MONTH)->get("episodes/{$id}");
+    }
+
+    /**
+     * Get the recommendations for the podcast
+     *
+     * @param $podcast_id
+     * @return \Ingenious\LaravelListenNotes\Repositories\PodcastCollection
+     */
+    public function recommendations($podcast_id) : PodcastCollection
+    {
+        return $this->ttl(static::CACHE_ONE_WEEK)->get("podcasts/{$podcast_id}/recommendations")->recommendations();
+    }
+
+    /**
+     * Get episodes for the specified Podcast
+     *
+     * @param \Ingenious\LaravelListenNotes\Repositories\Podcast $podcast
+     * @return \Ingenious\LaravelListenNotes\Repositories\EpisodeCollection
+     */
+    public function episodes(Podcast $podcast) : EpisodeCollection
+    {
+        return $this->podcastMeta($podcast->id)->episodes();
+    }
+
+    /**
+     * Get the collection of genres
+     *
+     * @return \Ingenious\LaravelListenNotes\Repositories\GenreCollection
+     */
+    public function genres() : GenreCollection
+    {
+        return $this->genresMeta()->genres();
+    }
+
+    /**
+     * Get the raw genre data
+     *
+     * @return \Ingenious\LaravelListenNotes\Repositories\ApiResponse
+     */
+    public function genresMeta() : ApiResponse
+    {
+        return $this->ttl(static::CACHE_ONE_MONTH)->get("genres");
+    }
+
+    /**
+     * Get the best podcasts for the specified genre
+     *
+     * @param $genre_id
+     * @param int $page
+     * @return \Ingenious\LaravelListenNotes\Repositories\PodcastCollection
+     */
+    public function bestPodcasts($genre_id = null, $page = 1) : PodcastCollection
+    {
+        return $this->bestPodcastsMeta($genre_id, $page)->bestPodcasts();
+    }
+
+    /**
+     * Get the raw best podcasts data for the specified genre
+     *
+     * @param $genre_id
+     * @param int $page
+     * @return \Ingenious\LaravelListenNotes\Repositories\ApiResponse
+     */
+    public function bestPodcastsMeta($genre_id = null, $page = 1) : ApiResponse
+    {
+        if ($genre_id)
+            return $this->ttl(static::CACHE_ONE_WEEK)->get("best_podcasts", compact('genre_id', 'page'));
+
+        return $this->ttl(static::CACHE_ONE_WEEK)->get("best_podcasts", compact('page'));
+    }
+
+    /**
+     * Perform a search
+     *
+     * @param $query
+     * @param $type
+     * @param array $options
+     * @return \Ingenious\LaravelListenNotes\Repositories\SearchResults
+     */
+    protected function search($query, $type, $options = []) : SearchResults
+    {
+        return $this->get("search", array_merge([
+                'q' => $query,
+                'type' => $type
+            ], $options))->results();
+
     }
 }
