@@ -12,6 +12,9 @@ class PodcastCollection extends Collection
     public static function collect($items)
     {
         return (new static($items))
+            ->filter(function($row) {
+                return strtolower($row['language']) === 'english';
+            })
             ->transform(function($row) {
                 return new Podcast($row);
             });

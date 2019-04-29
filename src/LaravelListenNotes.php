@@ -4,6 +4,7 @@ namespace Ingenious\LaravelListenNotes;
 
 
 use Ingenious\LaravelListenNotes\Contracts\PodcastProvider;
+use Ingenious\LaravelListenNotes\Exceptions\InvalidPodcastException;
 use Ingenious\LaravelListenNotes\Models\Genre;
 use Ingenious\LaravelListenNotes\Repositories\ApiResponse;
 use Ingenious\LaravelListenNotes\Repositories\Episode;
@@ -56,7 +57,8 @@ class LaravelListenNotes extends BasePodcastProvider implements PodcastProvider
     {
         return $this->get("search", array_merge([
             'q' => $query,
-            'type' => "podcast"
+            'type' => "podcast",
+            'language' => 'English'
         ], $options))->toArray();
     }
 
@@ -71,7 +73,8 @@ class LaravelListenNotes extends BasePodcastProvider implements PodcastProvider
     {
         return $this->get("search", array_merge([
             'q' => $query,
-            'type' => "episode"
+            'type' => "episode",
+            'language' => 'English'
         ], $options))->toArray();
     }
 
@@ -85,6 +88,7 @@ class LaravelListenNotes extends BasePodcastProvider implements PodcastProvider
      *
      * @param $name
      * @return \Ingenious\LaravelListenNotes\Repositories\Podcast
+     * @throws \Ingenious\LaravelListenNotes\Exceptions\InvalidPodcastException
      */
     public function podcastByName($name) : Podcast
     {
@@ -93,6 +97,9 @@ class LaravelListenNotes extends BasePodcastProvider implements PodcastProvider
                 return $row['title_original'] === $name;
             })
             ->first();
+
+        if ( ! $result )
+            throw new InvalidPodcastException("Cannot find podcast with {$name}");
 
         //$result = $this->searchPodcasts($name)->first();
 
@@ -195,6 +202,31 @@ class LaravelListenNotes extends BasePodcastProvider implements PodcastProvider
     }
 
     /**
+     * Get the curated list of podcasts
+     *
+     * @return \Ingenious\LaravelListenNotes\Repositories\PodcastCollection
+     */
+    public function curated() : PodcastCollection
+    {
+        $list = collect(config('laravel-listen-notes.best-podcasts'))
+            ->transform( function($name) {
+                try {
+                    return static::podcastByName($name);
+                }
+                catch(InvalidPodcastException $e)
+                {
+                    //\Log::info("Cant find {$name}");
+                    return null;
+                }
+            })
+            ->filter()
+            ->values()
+            ->all();
+
+        return new PodcastCollection($list);
+    }
+
+    /**
      * Get the best podcasts for the specified genre
      *
      * @param $genre_id
@@ -233,7 +265,8 @@ class LaravelListenNotes extends BasePodcastProvider implements PodcastProvider
     {
         return $this->get("search", array_merge([
                 'q' => $query,
-                'type' => $type
+                'type' => $type,
+                'language' => 'English'
             ], $options))->results();
 
     }
