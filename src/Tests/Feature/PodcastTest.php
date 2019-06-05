@@ -41,8 +41,8 @@ class PodcastTest extends TestCase
     /** @test */
     public function it_can_search_for_podcasts()
     {
-        $response = $this->post("api/v1/search",[
-            'term' => "This American Life"
+        $response = $this->postJson("api/v1/search",[
+            'query' => "This American Life"
         ]);
 
         $response->assertStatus(200)
@@ -52,7 +52,7 @@ class PodcastTest extends TestCase
     /** @test */
     public function it_can_get_a_podcast_by_id()
     {
-        $response = $this->get("api/v1/podcasts/{$this->podcast_id}");
+        $response = $this->getJson("api/v1/podcasts/{$this->podcast_id}");
 
         $response->assertStatus(200)
             ->assertJsonFragment(["title" => "Planet Money"]);
@@ -61,7 +61,7 @@ class PodcastTest extends TestCase
     /** @test */
     public function it_can_get_a_podcasts_episodes()
     {
-        $response = $this->get("api/v1/podcasts/{$this->podcast_id}/episodes");
+        $response = $this->getJson("api/v1/podcasts/{$this->podcast_id}/episodes");
 
         $response->assertStatus(200);
 

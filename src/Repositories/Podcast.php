@@ -78,7 +78,7 @@ class Podcast
         $this->model = PodcastModel::firstOrCreate([
             'id' => $this->id,
         ], [
-            'latest_pub_date' => Carbon::parse($this->latest_pub_date_ms)
+            'latest_pub_date' => Carbon::parse($this->latest_pub_date_ms / 1000)
         ]);
 
         return $this->model;

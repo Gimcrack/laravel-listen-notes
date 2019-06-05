@@ -3,6 +3,7 @@
 namespace Ingenious\LaravelListenNotes;
 
 
+use Illuminate\Support\Facades\Cache;
 use Ingenious\LaravelListenNotes\Contracts\PodcastProvider;
 use Ingenious\LaravelListenNotes\Exceptions\InvalidPodcastException;
 use Ingenious\LaravelListenNotes\Models\Genre;
@@ -208,20 +209,22 @@ class LaravelListenNotes extends BasePodcastProvider implements PodcastProvider
      */
     public function curated() : PodcastCollection
     {
-        $list = collect(config('laravel-listen-notes.best-podcasts'))
-            ->transform( function($name) {
-                try {
-                    return static::podcastByName($name);
-                }
-                catch(InvalidPodcastException $e)
-                {
-                    //\Log::info("Cant find {$name}");
-                    return null;
-                }
-            })
-            ->filter()
-            ->values()
-            ->all();
+        $list = Cache::remember('best-podcasts', static::CACHE_ONE_MONTH, function() {
+           return collect(config('laravel-listen-notes.best-podcasts'))
+               ->transform( function($name) {
+                   try {
+                       return static::podcastByName($name);
+                   }
+                   catch(InvalidPodcastException $e)
+                   {
+                       //\Log::info("Cant find {$name}");
+                       return null;
+                   }
+               })
+               ->filter()
+               ->values()
+               ->all();
+        });
 
         return new PodcastCollection($list);
     }
